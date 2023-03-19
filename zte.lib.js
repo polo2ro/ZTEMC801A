@@ -1,10 +1,13 @@
 const { createHash } = await import('node:crypto');
 import { hex_md5 } from './md5.js';
 
+class AdCommandError extends Error {}
+
 class Zte {
     password = null;
     cookie = null;
-    lastId = null;
+    baseUrl = 'http://192.168.0.1/';
+    timeout = 2000;
 
     constructor(password) {
         if (!password) {
@@ -14,17 +17,23 @@ class Zte {
     }
 
     async getLD() {
-        return fetch("http://192.168.0.1/goform/goform_get_cmd_process?isTest=false&cmd=LD&_="+Date.now(), {headers: {'referer': 'http://192.168.0.1/'}})
-            .then(r => r.json())
-            .then(data => data.LD);
+        const r = await fetch(this.baseUrl+"goform/goform_get_cmd_process?isTest=false&cmd=LD&_="+Date.now(), {
+            headers: {
+                referer: this.baseUrl,
+                signal: AbortSignal.timeout(this.timeout)
+            }
+        });
+        const data = await r.json();
+        return data.LD;
     }
 
     async getRD() {
         const cookie = await this.getLoginCookie();
-        const r = await fetch("http://192.168.0.1/goform/goform_get_cmd_process?isTest=false&cmd=RD&_="+Date.now(), {
+        const r = await fetch(this.baseUrl+"goform/goform_get_cmd_process?isTest=false&cmd=RD&_="+Date.now(), {
             headers: {
-                'referer': 'http://192.168.0.1/',
-                'Cookie': cookie
+                referer: this.baseUrl,
+                Cookie: cookie,
+                signal: AbortSignal.timeout(this.timeout)
             }
         });
         const data = await r.json();
@@ -33,9 +42,10 @@ class Zte {
 
     async getLoginCookie() {
         if(this.cookie) {
-            return Promise.resolve(this.cookie);
+            return this.cookie;
         }
 
+        console.log('update login cookie');
         const ld = await this.getLD();
         const hashPassword = createHash('sha256').update(this.password).digest("hex").toUpperCase()
         const ztePass = createHash('sha256').update(hashPassword+ld).digest("hex").toUpperCase()
@@ -44,38 +54,37 @@ class Zte {
         params.append('goformId', 'LOGIN');
         params.append('password', ztePass);
 
-        return fetch("http://192.168.0.1/goform/goform_set_cmd_process", {
+        const response = await fetch(this.baseUrl+"goform/goform_set_cmd_process", {
             method: "POST", 
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                'referer': 'http://192.168.0.1/'
+                referer: this.baseUrl,
+                signal: AbortSignal.timeout(this.timeout)
             },
             body: params.toString()
-        })
-        .then((response) => {
-            this.cookie = response.headers.get('Set-Cookie').split(';')[0];
-            return this.cookie;
-        })
-        .catch((e) => {
-            console.log("ERROR: login() failed.", e);
-        })
+        });
+
+        this.cookie = response.headers.get('Set-Cookie').split(';')[0];
+        return this.cookie;
     }
 
-    async getPppStatus() {
+    async getStatus() {
         const cookie = await this.getLoginCookie();
         const r = await fetch(
-            "http://192.168.0.1/goform/goform_get_cmd_process?multi_data=1&isTest=false&sms_received_flag_flag=0&sts_received_flag_flag=0&cmd=ppp_status&_="+Date.now(), 
+            this.baseUrl+"goform/goform_get_cmd_process?multi_data=1&isTest=false&sms_received_flag_flag=0&sts_received_flag_flag=0&cmd=ppp_status,loginfo&_="+Date.now(), 
             {
                 headers: {
-                    'referer': 'http://192.168.0.1/',
-                    'Cookie': cookie
+                    referer: this.baseUrl,
+                    Cookie: cookie,
+                    signal: AbortSignal.timeout(this.timeout)
                 }
             })
         const data = await r.json();
-        return data.ppp_status === 'ppp_connected';
+        
+        return data;
     }
 
-    async connectNetwork() {
+    async sendAdCommand(command) {
         const rd0 = 'MC801AV1.0.0B16';
         const rd1 = '';
 
@@ -86,15 +95,16 @@ class Zte {
         const params = new URLSearchParams();
         params.append('isTest', 'false');
         params.append('notCallback', 'true');
-        params.append('goformId', 'CONNECT_NETWORK');
+        params.append('goformId', command);
         params.append('AD', ad);
 
-        const response = await fetch("http://192.168.0.1/goform/goform_set_cmd_process", {
+        const response = await fetch(this.baseUrl+"goform/goform_set_cmd_process", {
             method: "POST", 
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-                'Cookie': cookie,
-                'referer': 'http://192.168.0.1/'
+                Cookie: cookie,
+                referer: this.baseUrl,
+                signal: AbortSignal.timeout(this.timeout)
             },
             body: params.toString()
         });
@@ -102,16 +112,27 @@ class Zte {
         const data = await response.json();
         
         if (data.result !== 'success') {
-            throw new Error(data.result);
+            throw new AdCommandError(data.result);
         }
 
         return true;
     }
 
+    async rebootDevice() {
+        return this.sendAdCommand('REBOOT_DEVICE');
+    }
+
+    async connectNetwork() {
+        return this.sendAdCommand('CONNECT_NETWORK');
+    }
+
     async connectIfNeeded() {
-        const ppp = await this.getPppStatus();
-        if (!ppp) {
-            console.log('connect');
+        const status = await this.getStatus();
+        if (status.ppp_status === 'ppp_disconnected') {
+            if (status.loginfo !== 'ok') {
+                this.cookie = null;
+            }
+            console.log('connect network');
             return this.connectNetwork();
         }
 
