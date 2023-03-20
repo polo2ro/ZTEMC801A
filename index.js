@@ -12,6 +12,7 @@ const loopMonitor = async () => {
             setTimeout(loopMonitor, 10000);
         }
     } catch (err) {
+        console.log(err.name);
         if (err.name === "TimeoutError") {
             console.log('restarting or unplugged device');
             setTimeout(loopMonitor, 2000);
@@ -21,7 +22,7 @@ const loopMonitor = async () => {
         if (err.name === "AdCommandError") {
             if (rebootCount < 2) {
                 console.log('Ad command failed, try with a reboot');
-                rebootStatus = await router.rebootDevice();
+                const rebootStatus = await router.rebootDevice();
                 rebootCount++;
 
                 if (rebootStatus) {

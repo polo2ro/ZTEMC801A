@@ -1,7 +1,9 @@
 const { createHash } = await import('node:crypto');
 import { hex_md5 } from './md5.js';
 
-class AdCommandError extends Error {}
+class AdCommandError extends Error {
+    name = 'AdCommandError';
+}
 
 class Zte {
     password = null;
