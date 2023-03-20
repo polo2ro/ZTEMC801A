@@ -80,7 +80,6 @@ class Zte {
                 }
             })
         const data = await r.json();
-        
         return data;
     }
 
@@ -94,7 +93,7 @@ class Zte {
         
         const params = new URLSearchParams();
         params.append('isTest', 'false');
-        params.append('notCallback', 'true');
+        //params.append('notCallback', 'true');
         params.append('goformId', command);
         params.append('AD', ad);
 
@@ -133,10 +132,28 @@ class Zte {
                 this.cookie = null;
             }
             console.log('connect network');
-            return this.connectNetwork();
+            const c = await this.connectNetwork();
+            const connected = await this.waitConnexion(3);
+
+            if (!connected) {
+                throw new AdCommandError('Uneffective connection');
+            }
         }
 
-        return Promise.resolve(true);
+        return true;
+    }
+
+    async waitConnexion(times) {
+        const status = await this.getStatus();
+        if (status.ppp_status === 'ppp_connected') {
+            return true;
+        }
+
+        if (times < 3) {
+            return new Promise((res) => setTimeout(() => res(this.waitConnexion(times + 1)), 500));
+        }
+
+        return false;
     }
 }
 
