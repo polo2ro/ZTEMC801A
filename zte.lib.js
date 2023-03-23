@@ -1,5 +1,5 @@
 const { createHash } = await import('node:crypto');
-import { hex_md5 } from './md5.js';
+import hex_md5 from 'md5-hex';
 
 class AdCommandError extends Error {
     name = 'AdCommandError';
