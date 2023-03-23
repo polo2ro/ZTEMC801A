@@ -12,22 +12,21 @@ const loopMonitor = async () => {
             setTimeout(loopMonitor, 10000);
         }
     } catch (err) {
-        console.log(err.name);
-        if (err.name === "TimeoutError") {
-            console.log('restarting or unplugged device');
+        if (err.name === 'TimeoutError' || err.name ===  'TypeError') {
+            console.log('restarting or unplugged device, retry...');
             setTimeout(loopMonitor, 2000);
             return;
         }
 
-        if (err.name === "AdCommandError") {
+        if (err.name === 'AdCommandError') {
             if (rebootCount < 2) {
                 console.log('Ad command failed, try with a reboot');
                 const rebootStatus = await router.rebootDevice();
                 rebootCount++;
 
                 if (rebootStatus) {
-                    console.log('sleep 15s while rebooting device');
-                    setTimeout(loopMonitor, 15000);
+                    console.log('sleep 60s while rebooting device');
+                    setTimeout(loopMonitor, 60000);
                     return;
                 }
             } else {
@@ -35,7 +34,7 @@ const loopMonitor = async () => {
             }
         }
 
-        console.error(err);
+        console.error(err, err.name);
         console.error('Unknown error, break loop');
     }
 }

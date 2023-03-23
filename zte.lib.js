@@ -95,7 +95,6 @@ class Zte {
         
         const params = new URLSearchParams();
         params.append('isTest', 'false');
-        //params.append('notCallback', 'true');
         params.append('goformId', command);
         params.append('AD', ad);
 
@@ -146,15 +145,17 @@ class Zte {
     }
 
     async waitConnexion(times) {
+        console.log('waitConnexion', times);
         const status = await this.getStatus();
         if (status.ppp_status === 'ppp_connected') {
             return true;
         }
 
-        if (times < 3) {
-            return new Promise((res) => setTimeout(() => res(this.waitConnexion(times + 1)), 500));
+        if (times > 0) {
+            return new Promise((res) => setTimeout(() => res(this.waitConnexion(times - 1)), 2000));
         }
 
+        console.log('waitConnexion timeout');
         return false;
     }
 }
