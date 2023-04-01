@@ -5,3 +5,11 @@ Monitor router status, connect to network if not connected, reboot device if con
 ```bash
 nodejs index.js "routerpassword"
 ```
+
+## install 
+
+install as a debian service
+
+```bash
+make install routerpassword
+```

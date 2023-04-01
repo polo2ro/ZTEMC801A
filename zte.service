@@ -1,0 +1,11 @@
+[Unit]
+Description=Zte autoconnect service
+
+[Service]
+User=%User%
+Group=%Group%
+WorkingDirectory=%WorkingDirectory%
+ExecStart=/usr/bin/node index.js %Password%
+
+[Install]
+WantedBy=multi-user.target

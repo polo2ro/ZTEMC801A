@@ -3,15 +3,20 @@ import { Zte } from './zte.lib.js';
 const router = new Zte(process.argv[2]);
 
 let rebootCount = 0;
+let first = true;
 
 const loopMonitor = async () => {
     try {
         const status = await router.connectIfNeeded();
         if (status) {
-            console.log('all good, check connexion in 10s');
+            if (first) {
+                console.log('all good, check connexion every 10s...');
+                first = false;
+            }
             setTimeout(loopMonitor, 10000);
         }
     } catch (err) {
+        first = true;
         if (err.name === 'TimeoutError' || err.name ===  'TypeError') {
             console.log('restarting or unplugged device, retry...');
             setTimeout(loopMonitor, 2000);
