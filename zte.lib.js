@@ -29,17 +29,21 @@ class Zte {
         return data.LD;
     }
 
-    async getRD() {
+    async getCmd(cmd) {
         const cookie = await this.getLoginCookie();
-        const r = await fetch(this.baseUrl+"goform/goform_get_cmd_process?isTest=false&cmd=RD&_="+Date.now(), {
+        const r = await fetch(this.baseUrl+"goform/goform_get_cmd_process?multi_data=1&isTest=false&cmd="+cmd+"&_="+Date.now(), {
             headers: {
                 referer: this.baseUrl,
                 Cookie: cookie,
                 signal: AbortSignal.timeout(this.timeout)
             }
         });
-        const data = await r.json();
-        return data.RD;
+        return await r.json();
+    }
+
+    async getRD() {
+        const cmd = await this.getCmd('RD');
+        return cmd.RD;
     }
 
     async getLoginCookie() {
@@ -86,11 +90,8 @@ class Zte {
     }
 
     async sendAdCommand(command) {
-        const rd0 = 'MC801AV1.0.0B16';
-        const rd1 = '';
-
         const rd = await this.getRD();
-        const ad = hex_md5(hex_md5(rd0 + rd1) + rd);
+        const ad = hex_md5(hex_md5('MC801AV1.0.0B16') + rd);
         const cookie = await this.getLoginCookie();
         
         const params = new URLSearchParams();
@@ -110,7 +111,6 @@ class Zte {
         });
 
         const data = await response.json();
-        
         if (data.result !== 'success') {
             throw new AdCommandError(data.result);
         }
@@ -126,14 +126,35 @@ class Zte {
         return this.sendAdCommand('CONNECT_NETWORK');
     }
 
+    async isMonthlyQuotaExcedeed() {
+        const state = await this.getCmd('monthly_tx_bytes,monthly_rx_bytes,data_volume_limit_size,data_volume_alert_percent,data_volume_limit_unit');
+        
+        if (state.data_volume_limit_unit != 'data') {
+            console.log('Unsupported data usage setting');
+            return false;
+        }
+
+        const consuption = parseInt(state.monthly_tx_bytes, 10) + parseInt(state.monthly_rx_bytes, 10);
+        const ratio =  parseInt(state.data_volume_alert_percent) / 100;
+        const limit = parseInt(state.data_volume_limit_size.replace('_1024', ''), 10) * 1024 * 1024 * 1024 * ratio;
+
+        return consuption > limit;
+    }
+
     async connectIfNeeded() {
         const status = await this.getStatus();
         if (status.ppp_status === 'ppp_disconnected') {
             if (status.loginfo !== 'ok') {
                 this.cookie = null;
             }
+
+            if (await this.isMonthlyQuotaExcedeed()) {
+                console.log('Monthly quota excedeed');
+                return false;
+            }
+
             console.log('connect network');
-            const c = await this.connectNetwork();
+            await this.connectNetwork();
             const connected = await this.waitConnexion(3);
 
             if (!connected) {
